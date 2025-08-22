@@ -70,7 +70,7 @@ def get_background_video(query="history abstract", filename=BACKGROUND_VIDEO):
     
     try:
         response = requests.get(url, headers=headers, params=params)
-        response.raise_for_status()  # HTTP hatalarını kontrol et
+        response.raise_for_status()
         data = response.json()
         
         videos = data.get('videos')
@@ -79,16 +79,24 @@ def get_background_video(query="history abstract", filename=BACKGROUND_VIDEO):
 
         video_data = random.choice(videos)
         
-        # En uygun video dosyasını bul (genellikle 'hd' kalitesinde olan iyidir)
         video_url = None
-        for file_info in video_data.get('video_files', []):
-            if 'hd' in file_info.get('quality', ''):
+        video_files = video_data.get('video_files', [])
+        
+        # --- GÜNCELLENEN GÜVENLİ KONTROL ---
+        # Önce 'hd' kalitesinde video arayalım
+        for file_info in video_files:
+            quality = file_info.get('quality') # Kalite bilgisini al (None olabilir)
+            # Kalite boş değilse VE 'hd' içeriyorsa linki al
+            if quality and 'hd' in quality:
                 video_url = file_info.get('link')
                 break
         
-        # Eğer HD kalitede bulamazsa ilk bulduğunu alsın
+        # Eğer 'hd' kalitede video bulunamazsa veya liste boşsa, mevcut ilk videoyu al
+        if not video_url and video_files:
+            video_url = video_files[0].get('link')
+
         if not video_url:
-            video_url = video_data.get('video_files', [])[0].get('link')
+            raise Exception("Videoya ait indirilebilir bir link bulunamadı.")
 
         print(f"Video indiriliyor: {video_url}")
         video_response = requests.get(video_url)

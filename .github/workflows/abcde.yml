@@ -1,4 +1,4 @@
-name: Create and Upload Daily YouTube Short
+name: Create and Upload youtube new2
 
 on:
   schedule:
