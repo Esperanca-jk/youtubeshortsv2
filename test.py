@@ -1,60 +1,87 @@
-import requests
-import re
-from datetime import datetime
 
-def get_todays_events():
+def get_todays_event():
     """
-    Fetch all 'On this day' events from English Wikipedia for today's UTC date.
-    Returns a list of event strings (year + detail).
+    Wikipedia (EN) 'Selected anniversaries' sayfasının Events bölümünden,
+    bugünün (UTC) rastgele bir olayını döndürür. Harici kütüphane gerekmez.
     """
-    # Tarih -> Wikipedia sayfa formatı: Wikipedia:Selected anniversaries/Month Day
-    MONTHS_EN = [
-        "", "January","February","March","April","May","June",
-        "July","August","September","October","November","December"
-    ]
-    now = datetime.utcnow()
+    import re
+    import requests
+    from datetime import datetime, timezone
+
+
+    USER_AGENT = "WhatHappenedTodayBot/1.0 (contact: you@example.com)"
+    API_URL = "https://en.wikipedia.org/w/api.php"
+    MONTHS_EN = ["","January","February","March","April","May","June",
+                 "July","August","September","October","November","December"]
+
+    now = datetime.now(timezone.utc)
     page_title = f"Wikipedia:Selected anniversaries/{MONTHS_EN[now.month]} {now.day}"
 
-    # MediaWiki API çağrısı
-    url = "https://en.wikipedia.org/w/api.php"
-    params = {
-        "action": "parse",
-        "page": page_title,
-        "prop": "wikitext",
-        "format": "json"
-    }
-    headers = {"User-Agent": "WhatHappenedTodayBot/1.0 (contact: youremail@example.com)"}
-    resp = requests.get(url, params=params, headers=headers, timeout=20)
-    data = resp.json()
+    def mw_get(params):
+        r = requests.get(API_URL, params=params,
+                         headers={"User-Agent": USER_AGENT}, timeout=20)
+        r.raise_for_status()
+        return r.json()
 
-    if "error" in data:
-        return ["No notable events found."]
+    # 1) 'Events' bölüm indexini bul
+    sec = mw_get({"action":"parse","page":page_title,"prop":"sections","format":"json"})
+    if "error" in sec:
+        return "No notable event could be found for today."
 
-    wikitext = data["parse"]["wikitext"]["*"]
+    events_index = None
+    for s in sec.get("parse", {}).get("sections", []):
+        if s.get("line","").strip().lower() == "events":
+            events_index = s.get("index")
+            break
 
-    # Satır satır ayır, sadece '*' ile başlayan olayları al
-    events = []
-    for line in wikitext.splitlines():
-        if line.strip().startswith("*"):
-            text = line.lstrip("* ").strip()
+    # 2) Events wikitext (varsa), yoksa tüm sayfa wikitext
+    if events_index is not None:
+        part = mw_get({"action":"parse","page":page_title,
+                       "prop":"wikitext","section":events_index,"format":"json"})
+        wt = (part.get("parse", {}).get("wikitext", {}) or {}).get("*")
+    else:
+        whole = mw_get({"action":"parse","page":page_title,
+                        "prop":"wikitext","format":"json"})
+        wt = (whole.get("parse", {}).get("wikitext", {}) or {}).get("*")
 
-            # Basit wiki temizliği
-            text = re.sub(r"\{\{[^{}]*\}\}", "", text)  # {{...}} şablonları
-            text = re.sub(r"\[\[([^|\]]+)\|([^\]]+)\]\]", r"\2", text)  # [[Target|Label]]
-            text = re.sub(r"\[\[([^\]]+)\]\]", r"\1", text)            # [[Target]]
-            text = re.sub(r"<ref[^>]*>.*?</ref>", "", text)            # <ref>...</ref>
-            text = re.sub(r"<ref[^>]*/>", "", text)                    # <ref .../>
-            text = re.sub(r"</?[^>]+>", "", text)                      # <tag>
-            text = re.sub(r"\s+", " ", text).strip()
+    if not wt:
+        # Fallback: bazen başka sayfa formatı
+        alt_title = page_title.replace("Wikipedia:Selected anniversaries/", "Portal:Current events/On this day/")
+        whole = mw_get({"action":"parse","page":alt_title,"prop":"wikitext","format":"json"})
+        wt = (whole.get("parse", {}).get("wikitext", {}) or {}).get("*")
+        if not wt:
+            return "No notable event could be found for today."
 
-            if text:
-                events.append(text)
+    # 3) Bullet maddeleri çek
+    lines = [ln.strip() for ln in wt.splitlines() if ln.strip().startswith("*")]
+    if not lines:
+        return "No notable event could be found for today."
 
-    return events if events else ["No notable events found."]
+    # 4) Temizlik
+    def clean(text):
+        # {{...}} şablonları (basit)
+        for _ in range(5):
+            text = re.sub(r"\{\{[^{}]*\}\}", "", text)
+        # [[Hedef|Etiket]] -> Etiket; [[Hedef]] -> Hedef
+        text = re.sub(r"\[\[([^|\]]+)\|([^\]]+)\]\]", r"\2", text)
+        text = re.sub(r"\[\[([^\]]+)\]\]", r"\1", text)
+        # <ref>…</ref>, <ref .../>, diğer HTML etiketleri
+        text = re.sub(r"<ref[^>]*>.*?</ref>", "", text, flags=re.DOTALL)
+        text = re.sub(r"<ref[^>]*/>", "", text)
+        text = re.sub(r"</?[^>]+>", "", text)
+        # HTML entity'ler ve boşluklar
+        text = text.replace("&nbsp;"," ").replace("&amp;","&")
+        text = re.sub(r"\s+", " ", text).strip()
+        return text
 
+    bullets = [clean(ln.lstrip("* ").strip()) for ln in lines]
+    bullets = [b for b in bullets if b]
 
-# Örnek kullanım:
-if __name__ == "__main__":
-    all_events = get_todays_events()
-    for e in all_events:
-        print("-", e)
+    if not bullets:
+        return "No notable event could be found for today."
+
+    # 5) Rastgele bir olay döndür
+    import random
+    return random.choice(bullets)
+
+print(get_todays_event())
