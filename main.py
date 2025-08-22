@@ -13,7 +13,7 @@ import youtube_uploader
 VIDEO_WIDTH = 1080
 VIDEO_HEIGHT = 1920
 VIDEO_FPS = 30
-FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" # GitHub Actions Ubuntu'da varsayılan font yolu
+FONT_PATH = "./Roboto-Bold.ttf" # GitHub Actions Ubuntu'da varsayılan font yolu
 
 # --- DOSYA İSİMLERİ ---
 AUDIO_FILE = "audio.mp3"
