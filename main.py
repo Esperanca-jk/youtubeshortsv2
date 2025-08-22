@@ -22,7 +22,7 @@ FINAL_VIDEO = "output.mp4"
 
 def get_todays_event():
     """Wikipedia'dan günün olayını çeker."""
-    wiki = wikipediaapi.Wikipedia('tr')
+    wiki = wikipediaapi.Wikipedia(user_agent='WhatHappenedTodayBot/1.0', language='tr')
     today = datetime.now()
     page_title = f"Şablon:Tarihte bugün/{today.day} {today.strftime('%B')}"
     
@@ -42,7 +42,7 @@ def get_todays_event():
 def generate_audio(text, filename=AUDIO_FILE):
     """Verilen metni ses dosyasına çevirir."""
     print("Ses dosyası oluşturuluyor...")
-    tts = gTTS(text=text, lang='tr', slow=False)
+    tts = gTTS(text=text, lang='en', slow=False)
     tts.save(filename)
     audio = MP3(filename)
     print(f"Ses dosyası oluşturuldu. Süre: {audio.info.length:.2f} saniye")
@@ -139,10 +139,10 @@ if __name__ == "__main__":
         final_video_file = create_video(event, duration)
         
         # 5. YouTube'a Yükle
-        today_str = datetime.now().strftime("%d %B %Y")
-        title = f"Tarihte Bugün Ne Oldu? - {today_str} #shorts"
-        description = f"{event}\n\n#tarihtebugün #tarih #bugünneoldu #shorts"
-        tags = ["tarihtebugün", "bilgi", "eğitim", "shorts"]
+        today_str = datetime.now().strftime("%B %d, %Y")
+        title = f"On This Day - {today_str} #shorts"
+        description = f"{event}\n\n#onthisday #history #todayinhistory #shorts"
+        tags = ["onthisday", "history", "education", "shorts"]
         
         youtube_uploader.upload_video(final_video_file, title, description, tags)
         
