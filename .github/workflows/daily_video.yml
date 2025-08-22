@@ -25,8 +25,15 @@ jobs:
           # FFmpeg'in kurulu olduğundan emin olalım
           sudo apt-get update && sudo apt-get install -y ffmpeg
 
+      # --- YENİ EKLENEN DOĞRULAMA ADIMI ---
+      # Bu adım, çalışan main.py dosyasının içeriğini loglara basar.
+      - name: Verify main.py content before running
+        run: |
+          echo "--- Kontrol Ediliyor: main.py dosyasının içeriği ---"
+          cat main.py
+          echo "----------------------------------------------------"
+      # ----------------------------------------
       - name: Run the main script
-        # GitHub Secrets'ları script'in kullanabilmesi için ortam değişkeni olarak ayarla
         env:
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
           YOUTUBE_CLIENT_SECRETS: ${{ secrets.YOUTUBE_CLIENT_SECRETS }}
