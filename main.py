@@ -21,32 +21,60 @@ BACKGROUND_VIDEO = "background.mp4"
 FINAL_VIDEO = "output.mp4"
 
 def get_todays_event():
-    """Wikipedia'dan günün olayını çeker."""
-    # HATA DÜZELTMESİ: Wikipedia API için user_agent eklendi.
-    wiki = wikipediaapi.Wikipedia(user_agent='WhatHappenedTodayBot/1.0', language='en')
-    
-    today = datetime.now()
-    # İngilizce Wikipedia sayfa formatı farklı olabilir, bu en yaygın olanıdır
-    page_title = f"Portal:Current events/On this day/{today.strftime('%B')} {today.day}"
-    
-    page = wiki.page(page_title)
+    """Wikipedia'dan günün (UTC) olaylarından rastgele birini çeker.
+    wikipedia-api paketi gerekir: pip install wikipedia-api
+    """
+    import random
+    from datetime import datetime
+    import wikipediaapi
+
+    # EN ay adları (locale bağımsız)
+    MONTHS_EN = [
+        "", "January","February","March","April","May","June",
+        "July","August","September","October","November","December"
+    ]
+
+    # Wikipedia istemcisi
+    wiki = wikipediaapi.Wikipedia(
+        language='en',
+        user_agent='WhatHappenedTodayBot/1.0'
+    )
+
+    # Tarihi UTC olarak al (içerik gün bazında değişir)
+    now = datetime.utcnow()
+    primary_title = f"Wikipedia:Selected anniversaries/{MONTHS_EN[now.month]} {now.day}"
+    fallback_title = f"Portal:Current events/On this day/{MONTHS_EN[now.month]} {now.day}"
+
+    # Önce canonical sayfa
+    page = wiki.page(primary_title)
     if not page.exists():
-        # Fallback to a different common format if the first one fails
-        page_title = f"Wikipedia:Selected anniversaries/{today.strftime('%B')} {today.day}"
-        page = wiki.page(page_title)
+        # Fallback
+        page = wiki.page(fallback_title)
         if not page.exists():
             return "No notable event could be found for today."
-        
-    # İçerik işlemesi İngilizce yapıya göre daha basit olabilir
-    events = page.text.split('Events\n')[1].split('\n') if 'Events\n' in page.text else page.text.split('\n')
 
-    valid_events = [e.strip() for e in events if e.strip() and e.startswith('*')]
-    
-    if not valid_events:
+    # 'Events' bölümünü güvenilir şekilde bul
+    def find_section(sections, name="Events"):
+        for s in sections:
+            if s.title.strip().lower() == name.lower():
+                return s
+            found = find_section(s.sections, name)
+            if found:
+                return found
+        return None
+
+    events_sec = find_section(page.sections, "Events")
+    lines = (events_sec.text if events_sec else page.text).splitlines()
+
+    # Yıldızlı maddeleri topla
+    bullets = [ln.lstrip("* ").strip() for ln in lines if ln.strip().startswith("*")]
+
+    if not bullets:
         return "No notable event could be found for today."
 
-    # Baştaki '*' karakterini temizle
-    return random.choice(valid_events).lstrip('* ').strip()
+    # Rastgele birini döndür
+    return random.choice(bullets)
+
 
 def generate_audio(text, filename=AUDIO_FILE):
     """Verilen metni ses dosyasına çevirir."""
