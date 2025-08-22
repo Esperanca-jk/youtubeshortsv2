@@ -22,22 +22,31 @@ FINAL_VIDEO = "output.mp4"
 
 def get_todays_event():
     """Wikipedia'dan günün olayını çeker."""
+    # HATA DÜZELTMESİ: Wikipedia API için user_agent eklendi.
     wiki = wikipediaapi.Wikipedia(user_agent='WhatHappenedTodayBot/1.0', language='en')
+    
     today = datetime.now()
-    page_title = f"Şablon:Tarihte bugün/{today.day} {today.strftime('%B')}"
+    # İngilizce Wikipedia sayfa formatı farklı olabilir, bu en yaygın olanıdır
+    page_title = f"Portal:Current events/On this day/{today.strftime('%B')} {today.day}"
     
     page = wiki.page(page_title)
     if not page.exists():
-        return "Bugün için bir olay bulunamadı."
+        # Fallback to a different common format if the first one fails
+        page_title = f"Wikipedia:Selected anniversaries/{today.strftime('%B')} {today.day}"
+        page = wiki.page(page_title)
+        if not page.exists():
+            return "No notable event could be found for today."
         
-    events = page.text.split('\n')
-    # Sadece olayları içeren satırları filtrele (genellikle '*' ile başlar)
-    valid_events = [e.strip() for e in events if e.strip() and not e.startswith(('==', '{', '|'))]
+    # İçerik işlemesi İngilizce yapıya göre daha basit olabilir
+    events = page.text.split('Events\n')[1].split('\n') if 'Events\n' in page.text else page.text.split('\n')
+
+    valid_events = [e.strip() for e in events if e.strip() and e.startswith('*')]
     
     if not valid_events:
-        return "Bugün için bir olay bulunamadı."
+        return "No notable event could be found for today."
 
-    return random.choice(valid_events)
+    # Baştaki '*' karakterini temizle
+    return random.choice(valid_events).lstrip('* ').strip()
 
 def generate_audio(text, filename=AUDIO_FILE):
     """Verilen metni ses dosyasına çevirir."""
@@ -48,31 +57,52 @@ def generate_audio(text, filename=AUDIO_FILE):
     print(f"Ses dosyası oluşturuldu. Süre: {audio.info.length:.2f} saniye")
     return filename, audio.info.length
 
-def get_background_video(query="history", filename=BACKGROUND_VIDEO):
+def get_background_video(query="history abstract", filename=BACKGROUND_VIDEO):
     """Pexels API kullanarak dikey bir arkaplan videosu bulur ve indirir."""
     print("Arka plan videosu aranıyor...")
     api_key = os.environ.get('PEXELS_API_KEY')
     if not api_key:
         raise ValueError("PEXELS_API_KEY ortam değişkeni bulunamadı.")
         
-    api = API(api_key)
-    api.search_videos(query, page=1, results_per_page=10, orientation='portrait')
+    headers = {'Authorization': api_key}
+    params = {'query': query, 'orientation': 'portrait', 'per_page': 15}
+    url = 'https://api.pexels.com/videos/search'
     
-    if not api.videos:
-        print(f"'{query}' için video bulunamadı. Genel bir arama yapılıyor.")
-        api.search_videos("abstract", page=1, results_per_page=10, orientation='portrait')
-        if not api.videos:
-            raise Exception("Pexels'ta uygun arkaplan videosu bulunamadı.")
+    try:
+        response = requests.get(url, headers=headers, params=params)
+        response.raise_for_status()  # HTTP hatalarını kontrol et
+        data = response.json()
+        
+        videos = data.get('videos')
+        if not videos:
+            raise Exception(f"Pexels'ta '{query}' için uygun arkaplan videosu bulunamadı.")
 
-    video = random.choice(api.videos)
-    video_url = video.video_files[0].link # En düşük kaliteli olanı hızlı indirmek için
+        video_data = random.choice(videos)
+        
+        # En uygun video dosyasını bul (genellikle 'hd' kalitesinde olan iyidir)
+        video_url = None
+        for file_info in video_data.get('video_files', []):
+            if 'hd' in file_info.get('quality', ''):
+                video_url = file_info.get('link')
+                break
+        
+        # Eğer HD kalitede bulamazsa ilk bulduğunu alsın
+        if not video_url:
+            video_url = video_data.get('video_files', [])[0].get('link')
+
+        print(f"Video indiriliyor: {video_url}")
+        video_response = requests.get(video_url)
+        video_response.raise_for_status()
+        
+        with open(filename, 'wb') as f:
+            f.write(video_response.content)
+            
+        print("Arka plan videosu indirildi.")
+        return filename
     
-    print(f"Video indiriliyor: {video_url}")
-    response = requests.get(video_url)
-    with open(filename, 'wb') as f:
-        f.write(response.content)
-    print("Arka plan videosu indirildi.")
-    return filename
+    except requests.exceptions.RequestException as e:
+        print(f"Pexels API'ye bağlanırken hata oluştu: {e}")
+        raise
 
 def create_video(event_text, audio_duration, bg_video=BACKGROUND_VIDEO, output_file=FINAL_VIDEO):
     """FFmpeg kullanarak son videoyu oluşturur."""
