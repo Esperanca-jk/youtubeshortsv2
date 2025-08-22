@@ -22,7 +22,7 @@ FINAL_VIDEO = "output.mp4"
 
 def get_todays_event():
     """Wikipedia'dan günün olayını çeker."""
-    wiki = wikipediaapi.Wikipedia(user_agent='WhatHappenedTodayBot/1.0', language='tr')
+    wiki = wikipediaapi.Wikipedia(user_agent='WhatHappenedTodayBot/1.0', language='en')
     today = datetime.now()
     page_title = f"Şablon:Tarihte bugün/{today.day} {today.strftime('%B')}"
     
