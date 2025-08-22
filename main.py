@@ -188,13 +188,14 @@ def create_video(event_text, audio_duration, bg_video=BACKGROUND_VIDEO, output_f
     lines.append(current_line.strip())
     formatted_text = "\\\n".join(lines)
 
+    sanitized_text = formatted_text.replace("'", "").replace(":", "-")
 
     command = [
         'ffmpeg', '-y',
         '-i', bg_video,
         '-i', AUDIO_FILE,
         '-filter_complex', f"[0:v]scale={VIDEO_WIDTH}:{VIDEO_HEIGHT}:force_original_aspect_ratio=increase,crop={VIDEO_WIDTH}:{VIDEO_HEIGHT},setsar=1[bg];"
-                         f"[bg]drawtext=fontfile='{FONT_PATH}':text='{formatted_text}':fontcolor=white:fontsize=70:box=1:boxcolor=black@0.6:boxborderw=15:x=(w-text_w)/2:y=(h-text_h)/2[video]",
+                         f"[bg]drawtext=fontfile='{FONT_PATH}':text='{sanitized_text}':fontcolor=white:fontsize=70:box=1:boxcolor=black@0.6:boxborderw=15:x=(w-text_w)/2:y=(h-text_h)/2[video]",
         '-map', '[video]',
         '-map', '1:a',
         '-c:v', 'libx264',
